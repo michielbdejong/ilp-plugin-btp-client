@@ -1,14 +1,17 @@
 const EventEmitter = require('eventemitter2')
-const BtpPacket = require('btp-packet')
 const BtpSpider = require('btp-toolbox').Spider
 const { URL } = require('url')
 const Codec = require('../../interledgerjs/btp-toolbox/src/codec')
+
+const TESTNET_VERSION = '17q3'
 
 class Plugin extends EventEmitter {
   constructor (config) {
     super()
     this.config = config
+    this.codec = new Codec(TESTNET_VERSION)
   }
+
   connect () {
     // The BTP URI must follow one of the following formats:
     // btp+wss://auth_username:auth_token@host:port/path
@@ -37,56 +40,19 @@ class Plugin extends EventEmitter {
     }, (peerId) => {
       console.log('connected!', peerId)
       this.peerId = peerId
-    }, (msg, peerId) => {
-      const obj = BtpPacket.deserialize(msg, this.config.version)
-      console.log('incoming message!', msg, obj, peerId)
+    }, (obj, peerId) => {
+      console.log('incoming message!', obj, peerId)
     })
     return this.spider.start().then(() => {
       this._isConnected = true
     })
   }
-
   disconnect () {
     this.spider.stop().then(() => {
       this._isConnected = true
     })
   }
-
-  isConnected () {
-    return Boolean(this._isConnected)
-  }
-
-  getInfo () {
-    return this.sendEvent('request', [ { custom: { 'info': Buffer.from([ 2 ]) } } ])
-  }
-
-  getAccount() {
-    return this.sendEvent('request', [ { custom: { 'info': Buffer.from([ 0 ]) } } ])
-  }
-
-  getBalance () {
-    return this.sendEvent('request', [ { custom: { 'balance': Buffer.from([ 0 ]) } } ])
-  }
-
-  getFulfillment (transferId) {
-    return this.sendEvent('request', [ { custom: { 'get_fulfillment': transferId } } ])
-  }
-
-  sendTransfer (transfer) {
-    return this.sendEvent('prepare', [ transfer ])
-  }
-
-  sendRequest (message) {
-    return this.sendEvent('request', [ message ])
-  }
-
-  fulfillCondition (transferId, fulfillment) {
-    return this.send('fulfill', [ { id : transferId }, fulfillment ])
-  }
-
-  rejectIncomingTransfer (transferId, rejectionReason) {
-    return this.send('reject', [ { id : transferId }, rejectionReason ])
-  }
+  isConnected () { return Boolean(this._isConnected) }
 
   registerRequestHandler (handler) {
     if (this._requestHandler) {
@@ -94,10 +60,18 @@ class Plugin extends EventEmitter {
     }
     this._requestHandler = handler
   }
+  deregisterRequestHandler () { delete this._requestHandler }
 
-  deregisterRequestHandler () {
-    delete this._requestHandler
-  }
+  _send(eventName, eventArgs) { this.spider.send(Codec.toBtp(eventName, eventArgs), this._peerId) }
+
+  getInfo () { return this._send('request', [ { custom: { 'info': Buffer.from([ 2 ]) } } ]) } 
+  getAccount() { return this._send('request', [ { custom: { 'info': Buffer.from([ 0 ]) } } ]) } 
+  getBalance () { return this._send('request', [ { custom: { 'balance': Buffer.from([ 0 ]) } } ]) } 
+  getFulfillment (transferId) { return this._send('request', [ { custom: { 'get_fulfillment': transferId } } ]) } 
+  sendTransfer (transfer) { return this._send('prepare', [ transfer ]) } 
+  sendRequest (message) { return this._send('request', [ message ]) } 
+  fulfillCondition (transferId, fulfillment) { return this._send('fulfill', [ { id : transferId }, fulfillment ]) } 
+  rejectIncomingTransfer (transferId, rejectionReason) { return this._send('reject', [ { id : transferId }, rejectionReason ]) }
 }
 
 module.exports = Plugin
