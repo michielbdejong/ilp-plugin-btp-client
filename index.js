@@ -1,5 +1,5 @@
 const EventEmitter = require('eventemitter2')
-const { BtpSpider, BtpCodec } = require('btp-toolbox')
+const { Spider, Codec } = require('btp-toolbox')
 const { URL } = require('url')
 
 const TESTNET_VERSION = '17q3'
@@ -8,7 +8,8 @@ class Plugin extends EventEmitter {
   constructor (config) {
     super()
     this.config = config
-    this.codec = new BtpCodec(TESTNET_VERSION)
+    this.codec = new Codec(TESTNET_VERSION)
+    this.responsePromise = {}
   }
 
   connect () {
@@ -29,23 +30,36 @@ class Plugin extends EventEmitter {
       throw new Error('server uri must start with "btp+"')
     }
     this._wsUri = parsedBtpUri.toString().substring('btp+'.length)
-    this.spider = new BtpSpider({
-      version: this.config.btpVersion,
-      name: this._authUsername,
-      upstreams: [ {
-        url: this._wsUri,
-        token: this._authToken
-      } ]
-    }, (peerId) => {
-      console.log('connected!', peerId)
-      this.peerId = peerId
-    }, (obj, peerId) => {
-      console.log('incoming message!', obj, peerId)
+    const spiderConnected = new Promise(resolve => {
+      this.spider = new Spider({
+        version: this.config.btpVersion,
+        name: this._authUsername,
+        upstreams: [ {
+          url: this._wsUri,
+          token: this._authToken
+        } ]
+      }, (peerId) => {
+        console.log('connected!', peerId)
+        this._peerId = peerId
+        resolve()
+      }, (obj, peerId) => {
+        console.log('incoming message!', obj, peerId)
+        if (this.responsePromise[obj.requestId]) {
+          this.codec.fromBtpToPromise(obj, this.responsePromise[obj.requestId])
+          delete this.responsePromise[obj.requestId]
+        } else {
+          this.codec.fromBtpToEvent(obj, this.emit.bind(this))
+        }
+      })
     })
     return this.spider.start().then(() => {
+      console.log('spider started!')
+      return spiderConnected
+    }).then(() => {
+      console.log('spider connected!')
       return Promise.all([
-        this._send('request', [ { custom: { 'info': Buffer.from([ 0 ]) } } ]).then(result => this._account = result),
-        this._send('request', [ { custom: { 'info': Buffer.from([ 2 ]) } } ]).then(result => this._info = result)
+        this._send('request', [ { custom: { 'info': Buffer.from([ 0 ]) } } ]).then(result => this._account = result).then(() => console.log('now know account', this._account)),
+        this._send('request', [ { custom: { 'info': Buffer.from([ 2 ]) } } ]).then(result => this._info = result).then(() => console.log('now know account', this._account))
       ])
     }).then(() => {
       this._isConnected = true
@@ -66,7 +80,14 @@ class Plugin extends EventEmitter {
   }
   deregisterRequestHandler () { delete this._requestHandler }
 
-  _send(eventName, eventArgs) { return this.spider.send(this.codec.toBtp(eventName, eventArgs), this._peerId) }
+  _send(eventName, eventArgs) {
+    const btpRequest = this.codec.toBtp(eventName, eventArgs)
+    const serverResponse = new Promise((resolve, reject) => {
+      this.responsePromise[btpRequest.requestId] = { resolve, reject }
+    })
+    console.log('plugin btp client sends a btp request', btpRequest)
+    return this.spider.send(btpRequest, this._peerId).then(() => serverResponse)
+  }
 
   getInfo () { return this._info }
   getAccount() { return this._account }
