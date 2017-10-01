@@ -1,7 +1,6 @@
 const EventEmitter = require('eventemitter2')
-const BtpSpider = require('btp-toolbox').Spider
+const { BtpSpider, BtpCodec } = require('btp-toolbox')
 const { URL } = require('url')
-const Codec = require('../../interledgerjs/btp-toolbox/src/codec')
 
 const TESTNET_VERSION = '17q3'
 
@@ -9,7 +8,7 @@ class Plugin extends EventEmitter {
   constructor (config) {
     super()
     this.config = config
-    this.codec = new Codec(TESTNET_VERSION)
+    this.codec = new BtpCodec(TESTNET_VERSION)
   }
 
   connect () {
@@ -44,6 +43,11 @@ class Plugin extends EventEmitter {
       console.log('incoming message!', obj, peerId)
     })
     return this.spider.start().then(() => {
+      return Promise.all([
+        this._send('request', [ { custom: { 'info': Buffer.from([ 0 ]) } } ]).then(result => this._account = result),
+        this._send('request', [ { custom: { 'info': Buffer.from([ 2 ]) } } ]).then(result => this._info = result)
+      ])
+    }).then(() => {
       this._isConnected = true
     })
   }
@@ -62,10 +66,10 @@ class Plugin extends EventEmitter {
   }
   deregisterRequestHandler () { delete this._requestHandler }
 
-  _send(eventName, eventArgs) { this.spider.send(Codec.toBtp(eventName, eventArgs), this._peerId) }
+  _send(eventName, eventArgs) { return this.spider.send(this.codec.toBtp(eventName, eventArgs), this._peerId) }
 
-  getInfo () { return this._send('request', [ { custom: { 'info': Buffer.from([ 2 ]) } } ]) } 
-  getAccount() { return this._send('request', [ { custom: { 'info': Buffer.from([ 0 ]) } } ]) } 
+  getInfo () { return this._info }
+  getAccount() { return this._account }
   getBalance () { return this._send('request', [ { custom: { 'balance': Buffer.from([ 0 ]) } } ]) } 
   getFulfillment (transferId) { return this._send('request', [ { custom: { 'get_fulfillment': transferId } } ]) } 
   sendTransfer (transfer) { return this._send('prepare', [ transfer ]) } 
