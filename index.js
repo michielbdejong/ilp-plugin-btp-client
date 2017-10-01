@@ -1,4 +1,4 @@
-const Spider = require('btp-toolbox').Spider
+const BtpSpider = require('btp-toolbox').Spider
 const { URL } = require('url')
 const Codec = require('../../interledgerjs/btp-toolbox/src/codec')
 
@@ -13,7 +13,7 @@ class Plugin {
     // btp+ws://auth_username:auth_token@host:port/path
     // btp+ws://auth_username:auth_token@host/path
     // See also: https://github.com/interledger/rfcs/pull/300
-    const parsedBtpUri = new URL(server)
+    const parsedBtpUri = new URL(this.config.btpUri)
     this._authUsername = parsedBtpUri.username
     this._authToken = parsedBtpUri.password
     parsedBtpUri.username = ''
@@ -25,14 +25,14 @@ class Plugin {
     }
     this._wsUri = parsedBtpUri.toString().substring('btp+'.length)
     this.spider = new BtpSpider({
-      version: this.config.btpVersion
-      name: this._authUsername
+      version: this.config.btpVersion,
+      name: this._authUsername,
       upstreams: [ {
-        uri: this._wsUri
+        uri: this._wsUri,
         token: this._authToken
       } ]
     })
-    this.spider.start().then(() => {
+    return this.spider.start().then(() => {
       this._isConnected = true
     })
   }
