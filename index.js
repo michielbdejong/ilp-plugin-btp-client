@@ -1,4 +1,5 @@
 const EventEmitter = require('eventemitter2')
+const BtpPacket = require('btp-packet')
 const BtpSpider = require('btp-toolbox').Spider
 const { URL } = require('url')
 const Codec = require('../../interledgerjs/btp-toolbox/src/codec')
