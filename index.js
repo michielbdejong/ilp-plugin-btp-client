@@ -1,9 +1,11 @@
+const EventEmitter = require('eventemitter2')
 const BtpSpider = require('btp-toolbox').Spider
 const { URL } = require('url')
 const Codec = require('../../interledgerjs/btp-toolbox/src/codec')
 
-class Plugin {
+class Plugin extends EventEmitter {
   constructor (config) {
+    super()
     this.config = config
   }
   connect () {
@@ -28,9 +30,15 @@ class Plugin {
       version: this.config.btpVersion,
       name: this._authUsername,
       upstreams: [ {
-        uri: this._wsUri,
+        url: this._wsUri,
         token: this._authToken
       } ]
+    }, (peerId) => {
+      console.log('connected!', peerId)
+      this.peerId = peerId
+    }, (msg, peerId) => {
+      const obj = BtpPacket.deserialize(msg, this.config.version)
+      console.log('incoming message!', msg, obj, peerId)
     })
     return this.spider.start().then(() => {
       this._isConnected = true
