@@ -1,6 +1,7 @@
 const EventEmitter = require('eventemitter2')
 const { Spider, Codec } = require('btp-toolbox')
 const { URL } = require('url')
+const uuid = require('uuid/v4')
 
 const TESTNET_VERSION = '17q3'
 
@@ -94,7 +95,18 @@ class Plugin extends EventEmitter {
   getBalance () { return this._send('request', [ { custom: { 'balance': Buffer.from([ 0 ]) } } ]) } 
   getFulfillment (transferId) { return this._send('request', [ { custom: { 'get_fulfillment': transferId } } ]) } 
   sendTransfer (transfer) { return this._send('prepare', [ transfer ]) } 
-  sendRequest (message) { return this._send('request', [ message ]) } 
+  sendRequest (message) {
+    return this._send('request', [ message ]).then(ilpResponseBase64 => {
+      return {
+        id: uuid(),
+        from: message.to,
+        to: message.from,
+        ledger: message.ledger,
+        ilp: ilpResponseBase64,
+        custom: {}
+      }
+    })
+  }
   fulfillCondition (transferId, fulfillment) { return this._send('fulfill', [ { id : transferId }, fulfillment ]) } 
   rejectIncomingTransfer (transferId, rejectionReason) { return this._send('reject', [ { id : transferId }, rejectionReason ]) }
 }
