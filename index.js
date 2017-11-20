@@ -1,5 +1,6 @@
 const EventEmitter = require('eventemitter2')
-const { Spider, Codec } = require('btp-toolbox')
+const Spider = require('./spider')
+const Codec = require('./codec')
 const { URL } = require('url')
 const uuid = require('uuid/v4')
 
