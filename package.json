@@ -1,6 +1,6 @@
 {
   "name": "ilp-plugin-btp-client",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A client that exposes the LPI inside the code, and acts as a BTP client for a remote BTP server.",
   "main": "index.js",
   "scripts": {
